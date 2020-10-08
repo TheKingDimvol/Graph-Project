@@ -1,0 +1,95 @@
+#viz {
+    width: 80vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-style: none;
+}
+
+#menu {
+    position: absolute;
+    width: 20vw;
+    height: 100vh;
+    top: 0vh;
+    left: 80vw;
+    background-color: rgb(252, 252, 252);
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+#graphMenu {
+    top: 1%;
+    left: 4%;
+    position: relative;
+}
+
+#graphMenu>*>* {
+    width: 100%;
+}
+
+#graphMenu>*>textarea {
+    width: 99%;
+    resize: vertical;
+    height: 8vh;
+    text-align: left;
+}
+
+#graphMenu>* {
+    width: 85%;
+    text-align: left;
+}
+
+#graphMenu>*>button {
+    box-shadow: inset 0px 1px 0px 0px #54a3f7;
+    background: linear-gradient(to bottom, #007dc1 5%, #0061a7 100%);
+    background-color: #007dc1;
+    border-radius: 3px;
+    border: 1px solid #124d77;
+    display: inline-block;
+    cursor: pointer;
+    color: #ffffff;
+    font-family: Arial;
+    font-size: 13px;
+    padding: 6px 24px;
+    text-decoration: none;
+    text-shadow: 0px 1px 0px #154682;
+}
+
+#graphMenu>*>button:hover {
+    background: linear-gradient(to bottom, #0061a7 5%, #007dc1 100%);
+    background-color: #0061a7;
+}
+
+#graphMenu>*>button:active {
+    position: relative;
+    top: 1px;
+}
+
+.vis-tooltip{
+    max-width: 30vw;
+    white-space: normal !important;
+}
+
+#dropDownUL {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    max-height: 12vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+#dropDownUL li a {
+    border: 1px solid #ddd;
+    margin-top: -1px;
+    background-color: white;
+    padding: 2px;
+    text-decoration: none;
+    color: black;
+    display: block;
+}
+
+#dropDownUL li a:hover:not(.header) {
+    background-color: #eee;
+}
