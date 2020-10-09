@@ -4,29 +4,52 @@ let username, password
 let updateHandler
 let selectorsID = ["relationshipEnd", "relationshipStart",
     "nodeSelect", "oneWayFilterSelector", "depthFilterSelector"]
-let serverUrl = "bolt://localhost:11007"
+let topicsID = ["newTopic", "topic"]
+let serverUrl = "bolt://localhost:7687"
 let initialCypher = "MATCH (a) , ()-[r]-() RETURN a, r"
+// будет хранить в реляционной БД
+let communities = []
 
 function getGraphInfo() {
     getLoginInfo()
     neo4jLogin()
     updateMenu()
     draw()
-    updateHandler = new vizUpdateHandler(initialCypher, viz)
+    updateGraph()
 }
 
-function clearFilters() {
-    viz.renderWithCypher(initialCypher)
+function updateGraph(reloadNeeded = false) {
+    let session = driver.session()
+    session
+        .run(initialCypher)
+        .then(result => {
+            if (result.records.length === 0) {
+                console.log("yes")
+                viz.updateWithCypher("MATCH (a) RETURN a")
+
+            }
+            else
+                viz.updateWithCypher(initialCypher)
+        })
+        .catch(error => {
+            console.log(error)
+        })
+        .then(() => {
+            if (reloadNeeded)
+                viz.reload()
+            session.close()
+        })
 }
 
+//!!! Костыль ([:subsection*0..100]) не показывает деревья с больше чем 100 этажей
 function addOneWayFilter() {
     viz.updateWithCypher("MATCH p = ({id:" + document.getElementById("oneWayFilterSelector").value
-        + "})-[:subsection*]->()  RETURN p")
+        + "})-[:subsection*0..100]->()  RETURN p")
 }
 
 function showOneWayFilter() {
     viz.renderWithCypher("MATCH p = ({id:" + document.getElementById("oneWayFilterSelector").value
-        + "})-[:subsection*]->()  RETURN p")
+        + "})-[:subsection*0..100]->()  RETURN p")
 }
 
 function addDepthFilter() {
@@ -98,22 +121,17 @@ function draw() {
         server_password: password,
         labels: {
             "Node": {
-                "caption": "title",
-                "size": "size",
-                "community": "type",
-                "title_properties": [
-                    "title",
-                    "description",
-                    "use",
-                    "id"
-                ],
-            },
+                caption: "title",
+                size: "size",
+                community: "topicNumber"
+            }
         },
         relationships: {
             "subsection": {
-                "caption": false,
-                "title_properties": false
-            },
+                caption: "type",
+                thickness: "thickness",
+                title_properties: false
+            }
         },
         arrows: true,
         initial_cypher: initialCypher
@@ -146,7 +164,7 @@ function getLoginInfo() {
 }
 
 function addNode() {
-    let availableId
+    let availableId = 0
     var idSession = driver.session()
     idSession
         .run("MATCH (p) RETURN p.id ORDER BY p.id DESC LIMIT 1")
@@ -163,22 +181,30 @@ function addNode() {
         })
         .then(() => {
             var createSession = driver.session()
+            let topic = document.getElementById("newTopic").value
+            if (topic === "Создать новую тему") {
+                topic = document.getElementById("newTitle").value
+                communities.push(topic)
+            }
             createSession
-                .run("CREATE (a" + availableId + ":Node {title: \"" + document.getElementById("title").value +
-                    "\", description:\"" + document.getElementById("desc").value +
-                    "\", use: [\" " + document.getElementById("use").value.split(",").join("\" , \"") + " \"], id:" + availableId + ", size:" + document.getElementById("type").value + "})")
-                .then(result => {
+                .run("CREATE (a" + availableId + ":Node {title: \"" + document.getElementById("newTitle").value +
+                    "\", topic:\"" + topic +
+                    "\", topicNumber:" + communities.indexOf(topic) +
+                    ", description:\"" + document.getElementById("newDesc").value +
+                    "\", use: [\" " + document.getElementById("newUse").value.split(",").join("\" , \"") + 
+                    " \"], id:" + availableId + 
+                    ", size:" + parseFloat(document.getElementById("newType").value) + "})")
+                .then(() => {
                 })
                 .catch(error => {
                     console.log(error)
                 })
                 .then(() => {
                     createSession.close()
-                    viz.updateWithCypher("MATCH p = ({id:" + availableId + "}) RETURN p")
+                    updateGraph()
                     updateMenu()
                 })
         })
-        .then(() => {updateMenu()})
 }
 
 function changeNode() {
@@ -189,7 +215,7 @@ function changeNode() {
             " SET p.title = \"" + document.getElementById("title").value + "\"" +
             " SET p.description = \"" + document.getElementById("desc").value + "\"" +
             " SET p.use = [\"" + document.getElementById("use").value.split(",").join("\" , \"") + "\"]" +
-            " SET p.size = " + document.getElementById("type").value
+            " SET p.size = " + parseFloat(document.getElementById("type").value)
         )
         .then(result => {
         })
@@ -198,8 +224,7 @@ function changeNode() {
         })
         .then(() => {
             setSession.close()
-            //viz.reload()
-            viz.updateWithCypher("MATCH p = ({id:" + document.getElementById("nodeSelect").value + "}) RETURN p")
+            updateGraph()
             updateMenu()
         })
 }
@@ -215,7 +240,7 @@ function removeNode() {
         })
         .then(() => {
             session.close()
-            viz.reload()
+            updateGraph(true)
             updateMenu()
         })
 }
@@ -223,6 +248,14 @@ function removeNode() {
 function updateMenu() {
     for (let i = 0; i < selectorsID.length; i++)
         clearSelect(selectorsID[i])
+    for (let i = 0; i < topicsID.length; i++)
+        clearSelect(topicsID[i])
+    let text = "Создать новую тему"
+    document.getElementById("newTitle").value = ""
+    document.getElementById("newDesc").value = ""
+    document.getElementById("newUse").value = ""
+    document.getElementById("newTopic").add(new Option(text, text, false, false))
+    getTopics()
     getNodes()
 }
 
@@ -234,10 +267,10 @@ function clearSelect(selectID) {
 function addRelationship() {
     let startNodeId = document.getElementById("relationshipStart").value
     let endNodeId = document.getElementById("relationshipEnd").value
-    console.log("MATCH (a:Node) , (b:Node) WHERE a.id = " + startNodeId + "  AND b.id = " + endNodeId + "  CREATE (a)-[:subsection]->(b)")
+    let relationshipType = document.getElementById("relationshipType").value
     var session = driver.session()
     session
-        .run("MATCH (a:Node) , (b:Node) WHERE a.id = " + startNodeId + "  AND b.id = " + endNodeId + "  CREATE (a)-[:subsection]->(b)")
+        .run(`MATCH (a) , (b) WHERE a.id = ${startNodeId} AND b.id = ${endNodeId}  CREATE (a)-[:subsection {type: "${relationshipType}"}]->(b)`)
         .then(result => {
         })
         .catch(error => {
@@ -245,7 +278,7 @@ function addRelationship() {
         })
         .then(() => {
             session.close()
-            viz.updateWithCypher("MATCH p = ({id:" + startNodeId + "})-[r]->({id:" + endNodeId + "}) RETURN p")
+            updateGraph()
         })
 
 }
@@ -255,7 +288,7 @@ function removeRelationship() {
     let endNodeId = document.getElementById("relationshipEnd").value
     var session = driver.session()
     session
-        .run("MATCH (a:Node {id:" + startNodeId + "})-[r:subsection]->(b:Node {id:" + endNodeId + "}) DELETE r")
+        .run("MATCH (a {id:" + startNodeId + "})-[r:subsection]->(b {id:" + endNodeId + "}) DELETE r")
         .then(result => {
         })
         .catch(error => {
@@ -263,20 +296,51 @@ function removeRelationship() {
         })
         .then(() => {
             session.close()
-            viz.reload()
+            updateGraph(true)
+        })
+}
+
+function getTopics() {
+    var session = driver.session()
+    session
+        .run("MATCH (p) WHERE p.topic IS NOT NULL RETURN DISTINCT p.topic")
+        .then(result => {
+            result.records.forEach(record => {
+                for (let i = 0; i < topicsID.length; i++)
+                    document.getElementById(topicsID[i]).add(new Option("<" + record.get("p.topic") + ">", record.get("p.topic"), false, false))
+            })
+        })
+        .catch(error => {
+            console.log(error)
+        })
+        .then(() => {
+            session.close()
         })
 }
 
 function getNodes() {
     var session = driver.session()
     session
-        .run("MATCH (p:Node) RETURN p.id, p.title")
+        .run("MATCH (p) RETURN p.id, p.title ORDER BY p.id")
         .then(result => {
             result.records.forEach(record => {
                 let text = "<" + record.get("p.id") + ">:" + record.get("p.title")
                 for (let i = 0; i < selectorsID.length; i++)
                     document.getElementById(selectorsID[i]).add(new Option(text, record.get("p.id"), false, false))
             })
+        })
+        .catch(error => {
+            console.log(error)
+        })
+        .then(() => {
+            var subSession = driver.session()
+            subSession
+                .run("MATCH (p) RETURN DISTINCT p.topic, p.topicNumber")
+                .then(result => {
+                    result.records.forEach(record => {
+                        communities[record._fields[1]] = (record._fields[0])
+                    })
+                })
         })
         .catch(error => {
             console.log(error)
@@ -290,11 +354,14 @@ function getNodes() {
 function getSelectedNodeInfo() {
     var session = driver.session()
     let id = document.getElementById("nodeSelect").value
-    session.run("MATCH (p:Node {id: " + id + "}) RETURN p.description, p.use, p.title, p.size LIMIT 1")
+    if (id === "") return
+    session
+        .run("MATCH (p {id: " + id + "}) RETURN p.description, p.use, p.title, p.topic, p.size LIMIT 1")
         .then(result => {
             result.records.forEach(record => {
                 document.getElementById("desc").value = record.get("p.description")
                 document.getElementById("title").value = record.get("p.title")
+                document.getElementById("topic").value = record.get("p.topic")
                 document.getElementById("use").value = record.get("p.use").join(", ")
 
                 let size = record.get("p.size")
