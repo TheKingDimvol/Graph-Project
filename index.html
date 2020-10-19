@@ -27,6 +27,19 @@
                 <br><button type="button" onclick="getGraphInfo()">Вход</button><br>
             </fieldset>
 
+            <fieldset name="addNodeByTemplate" id="addNodeByTemplate">
+                <legend align="left">Добавить вершину</legend>
+                <label>Название:</label><br>
+                <input type="text" id="caption" name="caption"><br>
+                <label>Шаблон:</label><br>
+                <select id="Template" name="Template" onChange="templateChanged(true)"></select><br>
+                <div id = "newTemplate"></div>
+                <div id = "propertys"></div>
+                <div id = "addPropertyDiv"></div>
+                <br><button id = "addProperty" type="button" onclick = "addPropertyClick()">Добавить свойство</button><br>
+                <br><button id = "addNodeButton" type="button" onclick="addNodeByTamplateClick()">Добавить вершину</button><br>
+            </fieldset>
+
             <fieldset name="depthFilter" id="depthFilter">
                 <legend align="left">Фильтр по дальности от вершины</legend>
                 <label for="depthFilterSelector">Начальная вершина:</label><br>

@@ -9,6 +9,7 @@ let serverUrl = "bolt://localhost:7687"
 let initialCypher = "MATCH (a) , ()-[r]-() RETURN a, r"
 // будет хранить в реляционной БД
 let communities = []
+let newPropertysCount = 0
 
 function getGraphInfo() {
     getLoginInfo()
@@ -16,6 +17,7 @@ function getGraphInfo() {
     updateMenu()
     draw()
     updateGraph()
+    start()
 }
 
 function updateGraph(reloadNeeded = false) {
@@ -41,6 +43,149 @@ function updateGraph(reloadNeeded = false) {
         })
 }
 
+function start() {
+    document.getElementById("Template").add(new Option("Новый шаблон"))
+    addTemplates("Template")
+    templateChanged(true)
+}
+
+function addTemplates(select) {
+    let templateSession = driver.session()
+    templateSession
+        .run("MATCH (n) RETURN distinct labels(n)")
+        .then(result => {
+            for(let template of result.records) {
+                document.getElementById(select).add(new Option(template.get("labels(n)")))
+            }
+        })
+        .catch(error => {console.log(error)})
+        .then(() => {
+            templateSession.close()
+        })
+}
+
+function templateChanged(isFirstLevel) {
+    document.getElementById("addPropertyDiv").innerHTML = ""
+    let templatesSelector = document.getElementById("Template")
+    if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый шаблон" && isFirstLevel) {
+        document.getElementById("propertys").innerHTML = ""
+        document.getElementById("newTemplate").innerHTML = '<label>Имя шаблона:</label><br>' +
+        '<input type="text" id="nameOfTemplate" name="nameOfTemplate"><br>' +
+        '<label>Унаследован от:</label><br>' +
+        '<select id="extendsTemplate" name="extendsTemplate" onChange="templateChanged(false)"></select><br>'
+        document.getElementById("extendsTemplate").add(new Option("Не унаследован"))
+        addTemplates("extendsTemplate")
+    }
+    else {
+        if(isFirstLevel) {
+            document.getElementById("newTemplate").innerHTML = ""
+        }
+        document.getElementById("propertys").innerHTML = ""
+        let session = driver.session()
+        let extendsTemplatesSelector = document.getElementById("extendsTemplate")
+        let nameOfLabel = isFirstLevel ? templatesSelector.options[templatesSelector.selectedIndex].text
+        : extendsTemplatesSelector.options[extendsTemplatesSelector.selectedIndex].text
+        session
+            .run("MATCH (a:" + nameOfLabel + ") UNWIND keys(a) AS key RETURN distinct key")
+            .then(result => {
+                for(let property of result.records) {
+                    if(property.get("key") != "title") {
+                        document.getElementById("propertys").innerHTML +=
+                        '<label>' + property.get("key") + ':</label><br>' +
+                        '<input type = "text" id = "' + property.get("key") + '"><br>'
+                    }
+                }
+            })
+            .catch(error => {
+                console.log(error)
+            })
+            .then(() => {
+                session.close()
+            })
+    }
+    newPropertysCount = 0
+}
+
+function addPropertyClick() {
+    document.getElementById("addPropertyDiv").innerHTML += '<label>Имя свойства:</label><br>' +
+    '<input type = "text" id = "property' + newPropertysCount + '"<br>' +
+    '<br><label>Значение:</label><br>' +
+    '<input type = "text" id = "property' + newPropertysCount++ + 'Value"<br><br>'
+}
+
+function addNodeByTamplateClick() {
+    if(document.getElementById("caption").value === "") {
+        return
+    }
+    let isFirstLevel = false
+    let cypher = "create (a:"
+    let templatesSelector = document.getElementById("Template")
+    if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый шаблон") {
+        if(document.getElementById("nameOfTemplate").value === "") {
+            return
+        }
+        isFirstLevel = true
+        cypher += document.getElementById("nameOfTemplate").value
+        templatesSelector.add(new Option(document.getElementById("nameOfTemplate").value))
+    }
+    else {
+        cypher += templatesSelector.options[templatesSelector.selectedIndex].text
+    }
+    cypher += "{"
+    let startOfIDProperty = 0
+    let propertysHTML = document.getElementById("propertys").innerHTML
+    let isFirstProperty = true
+    while (true) {
+        startOfIDProperty = propertysHTML.indexOf("=", startOfIDProperty)
+        if(startOfIDProperty == -1) {
+            break
+        }
+        if(!isFirstProperty) {
+            cypher += ","
+        }
+        startOfIDProperty = propertysHTML.indexOf("=", ++startOfIDProperty)
+        startOfIDProperty += 2;
+        let endOfIDProperty = startOfIDProperty;
+        while(propertysHTML[endOfIDProperty] != '"') {
+            endOfIDProperty++;
+        }
+        let propertyCaption = propertysHTML.slice(startOfIDProperty, endOfIDProperty)
+        cypher += propertyCaption + ': "' + document.getElementById(propertyCaption).value + '"'
+        isFirstProperty = false
+    }
+    let newPropertyNumber = 0;
+    while(document.getElementById("property" + newPropertyNumber) != null) {
+        if(!isFirstProperty) {
+            cypher += ","
+            alert(cypher)
+        }
+        cypher += document.getElementById("property" + newPropertyNumber).value + ': "' +
+        document.getElementById("property" + newPropertyNumber++ + "Value").value + '"'
+        alert(cypher)
+        isFirstProperty = false
+    }
+    if(!isFirstProperty) {
+        cypher += ","
+    }
+    cypher += ' title: "' + document.getElementById("caption").value + '"'
+    cypher += "})"
+    alert(cypher)
+    let session = driver.session()
+    session
+        .run(cypher)
+        .then(() => {})
+        .catch(error => {
+            console.log(error)
+        })
+        .then(() => {
+            session.close()
+            updateGraph()
+            updateMenu()
+        })
+    newPropertysCount = 0
+    templateChanged(isFirstLevel)
+    document.getElementById("caption").value = ""
+}
 //!!! Костыль ([:subsection*0..100]) не показывает деревья с больше чем 100 этажей
 function addOneWayFilter() {
     viz.updateWithCypher("MATCH p = ({id:" + document.getElementById("oneWayFilterSelector").value
@@ -153,7 +298,6 @@ async function neo4jLogin() {
     } catch (error) {
         alert("Ошибка аутентификации")
     }
-    session = driver.session()
 }
 
 function getLoginInfo() {
