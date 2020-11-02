@@ -16,7 +16,7 @@
         <form id="graphMenu" name="graphMenu">
             <fieldset name="loginInfo" id="loginInfo">
                 <label for="url">Сервер:</label><br>
-                <input type="text" id="url" name="url" value="bolt://localhost:7687"><br>
+                <input type="text" id="url" name="url" value="bolt://localhost:7687"><br>\
 
                 <label for="username">Имя пользователя :</label><br>
                 <input type="text" id="username" name="username" value="neo4j"><br>
@@ -25,6 +25,41 @@
                 <input type="text" id="password" name="password" value="123"><br>
 
                 <br><button type="button" onclick="getGraphInfo()">Вход</button><br>
+            </fieldset>
+
+            <fieldset name="addNodeByTemplate" id="addNodeByTemplate">
+                <legend align="left">Добавить вершину</legend>
+                <label>Название:</label><br>
+                <input type="text" id="caption"><br>
+                <label>Размер:</label>
+                <select id="size" name="size">
+                    <option value="20">Обычный</option>
+                    <option value="21">Большой</option>
+                </select><br>
+                <label>Тип:</label><br>
+                <select id="Label" onChange="templateChanged(true, 'Label')"></select><br>
+                <div id = "div1Label"></div>
+                <div id = "div2Label"></div>
+                <div id = "div3Label"></div>
+                <br><button type="button" onclick = "addPropertyClick('Label')">Добавить свойство</button><br>
+                <br><button type="button" onclick="addNodeByTamplateClick()">Добавить вершину</button><br>
+            </fieldset>
+
+            <fieldset>
+                <legend align = "left">Связать вершины</legend>
+                <label>Имя первой вершины</label>
+                <input type="text" id="firstNode" oninput="searchNodeByName('firstNode', 'firstNodeUL', clickOnULSearch)">
+                <ul id="firstNodeUL"></ul>
+                <label>Имя второй вершины</label>
+                <input type = "text" id = "secondNode" oninput="searchNodeByName('secondNode', 'secondNodeUL', clickOnULSearch)">
+                <ul id="secondNodeUL"></ul>
+                <label>Тип связи</label>
+                <select id = "Type" onchange="templateChanged(true, 'Type')"></select>
+                <div id = "div1Type"></div>
+                <div id = "div2Type"></div>
+                <div id = "div3Type"></div>
+                <br><button type = "button" onClick = "addPropertyClick('Type')">Добавить свойство</button><br>
+                <br><button type="button" onclick="addRelations()">Добавить связь</button><br>
             </fieldset>
 
             <fieldset name="depthFilter" id="depthFilter">
@@ -48,8 +83,8 @@
             </fieldset>
 
             <fieldset name="search" id="search">
-                <legend align="left">Пойск</legend>
-                <input type="text" oninput="searchNodeByName()" id="nodeSearch">
+                <legend align="left">Поиск</legend>
+                <input type="text" oninput="searchNodeByName('nodeSearch', 'dropDownUL', clickOnUL)" id="nodeSearch">
                 <ul id="dropDownUL">
                 </ul>
             </fieldset>
