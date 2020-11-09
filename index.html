@@ -37,7 +37,9 @@
                     <option value="21">Большой</option>
                 </select><br>
                 <label>Тип:</label><br>
-                <select id="Label" onChange="templateChanged(true, 'Label')"></select><br>
+                <select id="Label" onChange="templateChanged(true, 'Label')">
+                    <option>Новый тип</option>
+                </select><br>
                 <div id = "div1Label"></div>
                 <div id = "div2Label"></div>
                 <div id = "div3Label"></div>
@@ -54,7 +56,8 @@
                 <input type = "text" id = "secondNode" oninput="searchNodeByName('secondNode', 'secondNodeUL', clickOnULSearch)">
                 <ul id="secondNodeUL"></ul>
                 <label>Тип связи</label>
-                <select id = "Type" onchange="templateChanged(true, 'Type')"></select>
+                <select id = "Type" onchange="templateChanged(true, 'Type')">
+                    <option>Новый тип</option></select>
                 <div id = "div1Type"></div>
                 <div id = "div2Type"></div>
                 <div id = "div3Type"></div>
