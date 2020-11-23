@@ -4,30 +4,72 @@
 <head>
     <meta charset="UTF-8">
     <title>Graph</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
     <script src="https://cdn.neo4jlabs.com/neovis.js/v1.5.0/neovis.js"></script>
     <script src="https://unpkg.com/neo4j-driver" type="text/javascript"></script>
-    <script src="script.js" type="text/javascript"></script>
+    <script src="{{ url_for('static', filename='script.js') }}" type="text/javascript"></script>
 </head>
 
 <body style="overflow: hidden;">
     <div id="menu" scroll="yes">
         <form id="graphMenu" name="graphMenu">
-            <fieldset name="loginInfo" id="loginInfo">
+            <fieldset name="verb" id="verb" class="colLeft">
+                <legend align="left">Ребра</legend>
+
+                <label for="relationshipStart">Начальная вершина:</label><br>
+                <select id="relationshipStart" name="relationshipStart">
+                </select><br>
+
+                <label for="relationshipEnd">Конечная вершина:</label><br>
+                <select id="relationshipEnd" name="relationshipEnd">
+                </select><br><br>
+
+                <label for="relationshipType">Тип ребра(если удаляете, то не важно):</label><br>
+                <select id="relationshipType" name="relationshipType">
+                    <option value="ИСПОЛЬЗУЕТ">Использует</option>
+                    <option value="СОДЕРЖИТ">Содержит</option>
+                    <option value="ФОРМИРУЕТ">Формирует</option>
+                    <option value="ДОСТАВЛЯЕТ">Доставляет</option>
+                    <option value="ПРОВЕРЯЕТ">Проверяет</option>
+                </select><br>
+
+                <br><button type="button" onclick="addRelationship()">Добавить</button><br>
+                <br><button type="button" onclick="removeRelationship()">Удалить</button><br>
+            </fieldset>
+
+            <fieldset name="loginInfo" id="loginInfo" class="colRight">
                 <label for="url">Сервер:</label><br>
-                <input type="text" id="url" name="url" value="bolt://localhost:7687"><br>\
+                <input type="text" id="url" name="url" value="neo4j://176.57.217.75:7687"><br>
 
                 <label for="username">Имя пользователя :</label><br>
                 <input type="text" id="username" name="username" value="neo4j"><br>
 
                 <label for="password">Пароль:</label><br>
-                <input type="text" id="password" name="password" value="123"><br>
+                <input type="text" id="password" name="password" value="miner2"><br>
 
                 <br><button type="button" onclick="getGraphInfo()">Вход</button><br>
+            </fieldset>                      
+
+            <fieldset name="search" id="search" class="colRight">
+                <legend align="left">Поиск</legend>
+                <input type="text" oninput="searchNodeByName('nodeSearch', 'dropDownUL', clickOnUL)" id="nodeSearch">
+                <ul id="dropDownUL">
+                </ul>
             </fieldset>
 
-            <fieldset name="addNodeByTemplate" id="addNodeByTemplate">
+            <fieldset name="depthFilter" id="depthFilter" class="colRight">
+                <legend align="left">Фильтр по дальности от вершины</legend>
+                <label for="depthFilterSelector">Начальная вершина:</label><br>
+                <select id="depthFilterSelector" name="depthFilterSelector">
+                </select><br>
+                <label for="depth">Дальность</label><br>
+                <input type="text" id="depth" name="depth"><br>
+                <br><button type="button" onclick="showDepthFilter()">Показать в визуализации</button><br>
+                <br><button type="button" onclick="addDepthFilter()">Добавить в визуализацию</button><br>
+            </fieldset>
+
+            <fieldset name="addNodeByTemplate" id="addNodeByTemplate" class="colLeft">
                 <legend align="left">Добавить вершину</legend>
                 <label>Название:</label><br>
                 <input type="text" id="caption"><br>
@@ -45,35 +87,37 @@
                 <br><button type="button" onclick="addNodeByTamplateClick()">Добавить вершину</button><br>
             </fieldset>
 
-            <fieldset>
-                <legend align = "left">Связать вершины</legend>
-                <label>Имя первой вершины</label>
-                <input type="text" id="firstNode" oninput="searchNodeByName('firstNode', 'firstNodeUL', clickOnULSearch)">
-                <ul id="firstNodeUL"></ul>
-                <label>Имя второй вершины</label>
-                <input type = "text" id = "secondNode" oninput="searchNodeByName('secondNode', 'secondNodeUL', clickOnULSearch)">
-                <ul id="secondNodeUL"></ul>
-                <label>Тип связи</label>
-                <select id = "Type" onchange="templateChanged(true, 'Type')"></select>
-                <div id = "div1Type"></div>
-                <div id = "div2Type"></div>
-                <div id = "div3Type"></div>
-                <br><button type = "button" onClick = "addPropertyClick('Type')">Добавить свойство</button><br>
-                <br><button type="button" onclick="addRelations()">Добавить связь</button><br>
-            </fieldset>
-
-            <fieldset name="depthFilter" id="depthFilter">
-                <legend align="left">Фильтр по дальности от вершины</legend>
-                <label for="depthFilterSelector">Начальная вершина:</label><br>
-                <select id="depthFilterSelector" name="depthFilterSelector">
+            <fieldset name="vertex" id="vertex" class="colRight">
+                <legend align="left">Изменить/удалить вершину</legend>
+                <label for="nodeSelect">Вершина:</label><br>
+                <select id="nodeSelect" name="nodeSelect" onchange="getSelectedNodeInfo()">
                 </select><br>
-                <label for="depth">Дальность</label><br>
-                <input type="text" id="depth" name="depth"><br>
-                <br><button type="button" onclick="showDepthFilter()">Показать в визуализации</button><br>
-                <br><button type="button" onclick="addDepthFilter()">Добавить в визуализацию</button><br>
+
+                <label for="title">Название:</label><br>
+                <input type="text" id="title" name="title"><br>
+
+                <label for="title">Тема:</label><br>
+                <select id="topic" name="topic">
+                </select><br>
+
+                <label for="desc">Описание:</label><br>
+                <textarea id="desc" name="desc"></textarea><br>
+
+                <label for="use">Области использования (через запятую):</label><br>
+                <textarea id="use" name="use"></textarea><br>
+
+                <label for="type">Размер:</label><br>
+                <select id="type" name="type">
+                    <option value="20">Обычный</option>
+                    <option value="10">Маленький</option>
+                    <option value="30">Большой</option>
+                </select><br>
+
+                <br><button type="button" onclick="changeNode()">Изменить выбранную вершину</button><br>
+                <br><button type="button" onclick="removeNode()">Удалить выбранную вершину </button><br>
             </fieldset>
 
-            <fieldset name="oneWayFilter" id="oneWayFilter">
+            <fieldset name="oneWayFilter" id="oneWayFilter" class="colLeft">
                 <legend align="left">Фильтр по разделу</legend>
                 <label for="oneWayFilterSelector">Начальная вершина:</label><br>
                 <select id="oneWayFilterSelector" name="oneWayFilterSelector">
@@ -82,14 +126,13 @@
                 <br><button type="button" onclick="addOneWayFilter()">Добавить в визуализацию</button><br>
             </fieldset>
 
-            <fieldset name="search" id="search">
-                <legend align="left">Поиск</legend>
-                <input type="text" oninput="searchNodeByName('nodeSearch', 'dropDownUL', clickOnUL)" id="nodeSearch">
-                <ul id="dropDownUL">
-                </ul>
+            <fieldset name="search" id="refresh" class="colLeft">
+                <br><button type="button" onclick="updateGraph(true)">Обновить визуализацию</button><br>
             </fieldset>
 
-            <fieldset name="nodeSelector" id="nodeSelector">
+
+            <!-- скрыто с прицелом на удаление (но надо не расстроить scrip.js)-->
+            <fieldset name="nodeSelector" id="nodeSelector" style="display: none;">
                 <legend align="left">Добавить вершину</legend>
                 <label for="title">Название:</label><br>
                 <input type="text" id="newTitle" name="newTitle"><br>
@@ -113,61 +156,24 @@
                 <br><button type="button" onclick="addNode()">Добавить вершину</button><br>
             </fieldset>
 
-            <fieldset name="vertex" id="vertex">
-                <legend align="left">Изменить/удалить вершину</legend>
-                <label for="nodeSelect">Вершина:</label><br>
-                <select id="nodeSelect" name="nodeSelect" onchange="getSelectedNodeInfo()">
-                </select><br>
-
-                <label for="title">Название:</label><br>
-                <input type="text" id="title" name="title"><br>
-
-                <label for="title">Тема:</label><br>
-                <select id="topic" name="topic">
-                </select><br>
-
-                <label for="desc">Описание:</label><br>
-                <textarea id="desc" name="desc"></textarea><br>
-
-                <label for="use">Области использования (через запятую):</label><br>
-                <textarea id="use" name="use"></textarea><br>
-
-                <label for="type">Размер:</label><br>
-                <select id="type" name="type">
-                    <option value="1">Обычный</option>
-                    <option value="0.5">Маленький</option>
-                    <option value="1.5">Большой</option>
-                </select><br>
-
-                <br><button type="button" onclick="changeNode()">Изменить выбранную вершину</button><br>
-                <br><button type="button" onclick="removeNode()">Удалить выбранную вершину </button><br>
+            <fieldset style="display: none;">
+                <legend align = "left">Связать вершины</legend>
+                <label>Имя первой вершины</label>
+                <input type="text" id="firstNode" oninput="searchNodeByName('firstNode', 'firstNodeUL', clickOnULSearch)">
+                <ul id="firstNodeUL"></ul>
+                <label>Имя второй вершины</label>
+                <input type = "text" id = "secondNode" oninput="searchNodeByName('secondNode', 'secondNodeUL', clickOnULSearch)">
+                <ul id="secondNodeUL"></ul>
+                <label>Тип связи</label>
+                <select id = "Type" onchange="templateChanged(true, 'Type')"></select>
+                <div id = "div1Type"></div>
+                <div id = "div2Type"></div>
+                <div id = "div3Type"></div>
+                <br><button type = "button" onClick = "addPropertyClick('Type')">Добавить свойство</button><br>
+                <br><button type="button" onclick="addRelations()">Добавить связь</button><br>
             </fieldset>
 
-            <fieldset name="verb" id="verb">
-                <legend align="left">Ребра</legend>
-
-                <label for="relationshipStart">Начальная вершина:</label><br>
-                <select id="relationshipStart" name="relationshipStart">
-                </select><br>
-
-                <label for="relationshipEnd">Конечная вершина:</label><br>
-                <select id="relationshipEnd" name="relationshipEnd">
-                </select><br><br>
-
-                <label for="relationshipType">Тип ребра(если удаляете, то не важно):</label><br>
-                <select id="relationshipType" name="relationshipType">
-                    <option value="USE">USE</option>
-                    <option value="IS_PART_OF">IS_PART_OF</option>
-                </select><br>
-
-                <br><button type="button" onclick="addRelationship()">Добавить</button><br>
-                <br><button type="button" onclick="removeRelationship()">Удалить</button><br>
-            </fieldset>
-
-            <fieldset name="search" id="refresh">
-                <br><button type="button" onclick="updateGraph(true)">Обновить визуализацию</button><br>
-            </fieldset>
-
+            <!-- конец временно скрытых полей -->
         </form>
     </div>
 
