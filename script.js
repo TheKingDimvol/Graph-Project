@@ -1,3 +1,7 @@
+/**
+ *  https://visjs.github.io/vis-network/docs/network/ -- док. по работе на холсте с графом
+ */
+
 let viz
 let driver
 let username, password
@@ -5,16 +9,16 @@ let updateHandler
 let selectorsID = ["relationshipEnd", "relationshipStart",
     "nodeSelect", "oneWayFilterSelector", "depthFilterSelector"]
 let topicsID = ["newTopic", "topic"]
-let serverUrl = "bolt://localhost:7687"
+let serverUrl = "neo4j://176.57.217.75:7687"
 let initialCypher = "MATCH (a) , ()-[r]-() RETURN a, r"
 // будет хранить в реляционной БД
 let communities = []
 let newPropertysLabelCount = 0
 let newPropertysTypeCount = 0
 let config
-let lastID = -1
 let firstNodeID = -1
 let secondNodeID = -1
+let vizualHandlersApplyed = false
 
 function getGraphInfo() {
     getLoginInfo()
@@ -43,6 +47,7 @@ function updateGraph(reloadNeeded = false) {
         .then(() => {
             if (reloadNeeded)
                 viz.reload()
+            setVisEventsHandlers()  // ставим обработчики событий на холсте
             session.close()
         })
 }
@@ -53,17 +58,7 @@ function start() {
     fillingSelect("Label", "MATCH (n) RETURN distinct labels(n)", "labels(n)")
     fillingSelect("Type", "MATCH (a)-[r]->(b) RETURN distinct(type(r))", "(type(r))")
     templateChanged(true, 'Label')
-    templateChanged(true, 'Type')
-    let session = driver.session()
-    session
-        .run("match (a) return a.id order by a.id desc limit 1")
-        .then(result => {
-            lastID = result.records[0].get("a.id")
-        })
-        .catch(error => {
-            console.log(error)
-        })
-        .then(() => session.close())
+    templateChanged(true, 'Type')    
 }
 
 function fillingSelect(select, cypherCode, captionOfResult) {
@@ -78,8 +73,15 @@ function fillingSelect(select, cypherCode, captionOfResult) {
                     config.labels[captionOfTemplate] = {
                         caption: "title",
                         size: "size",
-                        community: "topicNumber"
+                        community: "community",
+                        //image: 'https://visjs.org/images/visjs_logo.png'
                     }
+                    /*config.labels["Node"] = {  // если индивидуально под вершину
+                        caption: "title",
+                        size: "size",
+                        community: "topicNumber",
+                        image: 'https://visjs.org/images/visjs_logo.png'
+                    }*/
                 }
             }
         })
@@ -122,7 +124,8 @@ function templateChanged(isFirstLevel, templateType) {
             .run(cypher)
             .then(result => {
                 for(let property of result.records) {
-                    if(property.get("key") !== "title" && property.get("key") !== "size" && property.get("key") !== "id") {
+                    if(property.get("key") !== "title" && property.get("key") !== "size" 
+                        && property.get("key") !== "id" && property.get("key") !== "community") {
                         document.getElementById("div2" + templateType).innerHTML +=
                         '<label>' + property.get("key") + ':</label><br>' +
                         '<input type = "text" id = "' + property.get("key") + '"><br>'
@@ -252,56 +255,103 @@ function readPropertys(templateType) {
     return cypher
 }
 
+/** 
+ * Считывает название Типа вершины из поля формы. Если это "Новый тип",
+ * то для него создается раздел в config.labels. 
+ * @return {object} контейнер с названием и сведениями о состоянии
+ *   {
+       name: название типа, 
+ *     isNew: флаг - новый ли,
+ *     isFirstLevel: флаг - верхний ли уровень наследования,
+ *     error: флаг ошибки
+ *    }
+ */
+function handleTemplateName(){
+    let result = {name: "", isNew: false, isFirstLevel: false, error: false}
+
+    let templatesSelector = document.getElementById("Label")
+    if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый тип") {
+        result.isNew = true
+        if(document.getElementById("nameOfLabel").value === "") {
+            result.error = true
+        } else {
+            result.isFirstLevel = true
+            result.name = replacementSpaces(document.getElementById("nameOfLabel").value)
+            document.getElementById("extendsLabel").add(new Option(result.name))        
+            templatesSelector.add(new Option(result.name))
+            config.labels[result.name] = {
+                caption: "title",
+                size: "size",
+                community: "community"
+            }
+        } 
+    }
+    else {
+        result.name = templatesSelector.options[templatesSelector.selectedIndex].text
+    }
+    return result
+}
+
+/** Добавляет вершину выбранного типа в граф */
 function addNodeByTamplateClick() {
     if(document.getElementById("caption").value === "") {
         return
     }
-    let isFirstLevel = false
-    let cypher = "create (a:"
-    let templatesSelector = document.getElementById("Label")
-    if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый тип") {
-        if(document.getElementById("nameOfLabel").value === "") {
-            return
-        }
-        isFirstLevel = true
-        let captionOfTemplate = replacementSpaces(document.getElementById("nameOfLabel").value)
-        document.getElementById("extendsLabel").add(new Option(captionOfTemplate))
-        cypher += captionOfTemplate
-        templatesSelector.add(new Option(captionOfTemplate))
-        config.labels[captionOfTemplate] = {
-            caption: "title",
-            size: "size",
-            community: "topicNumber"
-        }
+    templateInfo = handleTemplateName()
+    if (templateInfo.error) {
+        return
     }
-    else {
-        cypher += templatesSelector.options[templatesSelector.selectedIndex].text
-    }
-    let propertys = readPropertys("Label")
-    let isFirstProperty = propertys === "" ? true : false
-    cypher += "{" + propertys
-    if(!isFirstProperty) {
-        cypher += ","
-    }
-    cypher += ' title: "' + document.getElementById("caption").value + '",'
-    cypher += ' id: ' + ++lastID + ','
-    cypher += ' size:' + document.getElementById("size").options[document.getElementById("size").selectedIndex].value + '})'
     let session = driver.session()
     session
-        .run(cypher)
-        .then(() => {})
+        .run("MATCH (n:" + templateInfo.name + ") RETURN n.community")
+        .then(result => {
+            let community = result.records[0].get("n.community")
+
+            let cypher ="MATCH (n) WITH max(n.community) AS last_community, max(n.id) AS last_ID " 
+            cypher +="CREATE (a:" + templateInfo.name
+            
+            // собираем в запрос свойства
+            let propertys = readPropertys("Label")
+            let isFirstProperty = propertys === "" ? true : false
+            cypher += "{" + propertys
+            if (!isFirstProperty) {
+                cypher += ","
+            }
+            
+            let community_id = templateInfo.isNew ? " last_community+1 " : community
+
+            cypher += ' title: "' + document.getElementById("caption").value + '", '
+            cypher += ' id: last_ID+1, '
+            cypher += ' community: ' + community_id  + ', '
+            let sizeVal = document.getElementById("size")
+                                  .options[document.getElementById("size").selectedIndex]
+                                  .value
+            cypher += ' size:' + sizeVal + '})'
+            
+            // добавляем в граф вершину с заданным типом и свойствами
+            var subSession = driver.session()
+            subSession
+                .run(cypher)
+                .then(() => {})
+                .catch(error => {
+                    console.log(error)
+                    alert("Не получилось добавить вершину. Возможно вы где-то ввели недопустимый символ.")
+                    alert(cypher)
+                })
+                .then(() => {
+                    session.close()
+                    updateGraph()
+                    updateMenu()
+                }) 
+
+        })
         .catch(error => {
             console.log(error)
-            alert("Не получилось добавить вершину. Возможно вы где-то ввели недопустимый символ.")
-            alert(cypher)
+            alert("Ошибка запроса к БД. Не удалось прочитать тип вершины.")            
         })
-        .then(() => {
-            session.close()
-            updateGraph()
-            updateMenu()
-        })
+
     newPropertysLabelCount = 0
-    templateChanged(isFirstLevel, "Label")
+    templateChanged(templateInfo.isFirstLevel, "Label")
     document.getElementById("caption").value = ""
 }
 
@@ -400,19 +450,19 @@ function clickOnUL(event) {
     }
 }
 
-function draw() {
-        config = {
+function draw() {    
+    config = {
         container_id: "viz",
         server_url: serverUrl,
         server_user: username,
         server_password: password,
-        labels: {
+        labels: {  // не влияет на ситуацию - config.labels перезаписывается в других местах 
             "Node": {
                 caption: "title",
                 size: "size",
                 community: "topicNumber"
             }
-        },
+        }, 
         relationships: {
             "subsection": {
                 caption: "type",
@@ -516,7 +566,7 @@ function changeNode() {
 }
 
 function removeNode() {
-    var session = driver.session()
+    var session = driver.session()    
     session
         .run("MATCH (p) WHERE p.id =" + document.getElementById("nodeSelect").value + " DETACH DELETE p")
         .then(result => {
@@ -527,6 +577,12 @@ function removeNode() {
         .then(() => {
             session.close()
             updateGraph(true)
+            /* вариант удаления по id без обновления всего графа. 
+            Проблема из-за несовпадения id на холсте и в БД.
+            id = parseInt(document.getElementById("nodeSelect").value)
+            viz._network.selectNodes([id])  // выделяем на холсте узел
+            viz._network.deleteSelected()   // удаляем его из визуализации
+            */
             updateMenu()
         })
 }
@@ -665,3 +721,80 @@ function getSelectedNodeInfo() {
         })
         .then(() => session.close())
 }
+
+/*=================== Обработка событий ================*/
+
+/**
+ * По ID вершины от визуализатора считывает известные ему свойства вершины
+ * @param {number} ID вершины на холсте
+ * @return {object} объект со свойствами ключ-значение, например {'id':'5', 'use':'IT'}
+ */
+function getVisualNodeProperties(visualId){
+    let props = {}
+    // извлечем свойства из поля title вершины (должен быть способ лучше)
+    nodePropertiesString = viz._nodes[visualId].title    
+    nodePropertiesString.split('<br>').forEach((line, i, arr) => {
+        let keyVal = line.replace('<strong>','').replace('</strong>','').split(':')        
+        if (keyVal[0].length > 0) {
+            props[keyVal[0]] = keyVal[1].trim()
+        }
+    })
+    return props
+}
+
+
+/**
+ * Привязывает обработчик к клику по вершине.
+ * Кликнутая вершина ставится выбранной в формах c select-ами по вершинам
+ */
+function setNodeClickHandler(){    
+    viz._network.on('click', (param) => {  // по клику на холст
+        if (param.nodes.length > 0) {
+            nodeIdAtCanvas = param.nodes[0]  // ID вершины на холсте, не совпадает с ID в БД        
+            let properties = getVisualNodeProperties(nodeIdAtCanvas)
+            realID = parseInt(properties.id)
+            if (realID != NaN) {
+                // ставим выбранной нужную вершину и симулируем клик по select-ам
+                document.getElementById('nodeSelect').value = realID
+                document.getElementById('nodeSelect').dispatchEvent(new MouseEvent('change'))
+
+                document.getElementById('relationshipStart').value = realID
+                document.getElementById('relationshipStart').dispatchEvent(new MouseEvent('change'))
+
+            }
+        }
+        
+    })
+}
+
+/**
+ * Ставит обработчики на элементы холста, как только он прорисовался
+ * (до этого объект viz._network равен null)
+ */
+function setVisEventsHandlers(){
+    viz.registerOnEvent("completed", (e)=>{
+        setNodeClickHandler()             
+        //TODO: обработчики на doubleClick, oncontext(правый клик), hold...
+    });
+}
+
+/*=================== END Обработка событий ================*/
+
+/*
+
+// заметки по сохранению состояния
+
+//считать все координаты всех вершин 
+pos = viz._network.getPositions()
+// сохраняться в виде в pos={{0:{x:-10, y:15}, {0:{x:154, y:165}, ... }
+
+ 
+// переместить вершины согласно координатам из объекта pos
+for (i=0; i<Object.keys(pos).length; i++) {
+    viz._network.moveNode(i, pos[i].x, pos[i].y)
+}
+
+НО: если в промежутке между сохранение и чтением кол-во узлов поменяют,
+координаты применятся не к тем узлам. Вывод - хранить координаты
+индивидуально в узлах
+*/

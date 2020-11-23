@@ -1,5 +1,5 @@
 #viz {
-    width: 80vw;
+    width: 65vw;
     height: 100vh;
     position: absolute;
     top: 0;
@@ -9,13 +9,16 @@
 
 #menu {
     position: absolute;
-    width: 20vw;
+    width: 35vw;
+    min-width: 440px;
     height: 100vh;
     top: 0vh;
-    left: 80vw;
+    left: 65vw;
     background-color: rgb(252, 252, 252);
     overflow-y: scroll;
     overflow-x: hidden;
+    padding-right: 1vw;
+    box-sizing: border-box;
 }
 
 #graphMenu {
@@ -40,6 +43,19 @@
     text-align: left;
 }
 
+
+#graphMenu fieldset {
+    width: 42%;
+}
+
+.colLeft {
+    float: left;
+}
+
+.colRight {
+    float: right;
+}
+
 #graphMenu>*>button {
     box-shadow: inset 0px 1px 0px 0px #54a3f7;
     background: linear-gradient(to bottom, #007dc1 5%, #0061a7 100%);
@@ -55,7 +71,7 @@
     text-decoration: none;
     text-shadow: 0px 1px 0px #154682;
 }
-
+ 
 #graphMenu>*>button:hover {
     background: linear-gradient(to bottom, #0061a7 5%, #007dc1 100%);
     background-color: #0061a7;
