@@ -9,12 +9,12 @@ let serverUrl = "bolt://localhost:7687"
 let initialCypher = "MATCH (a) , ()-[r]-() RETURN a, r"
 // будет хранить в реляционной БД
 let communities = []
-let newPropertysLabelCount = 0
-let newPropertysTypeCount = 0
-let config
-let lastID = -1
-let firstNodeID = -1
-let secondNodeID = -1
+let newPropertysLabelCount = 0//кол-во добавленных свойств для типа вершины
+let newPropertysTypeCount = 0//кол-во добавленных свойств для типа связи
+let config//config для neovis
+let lastID = -1//id последнего добавленного элемента
+let firstNodeID = -1//id первой вершины, которую нужно связать
+let secondNodeID = -1//id второй вершины, которую нужно связать
 
 function getGraphInfo() {
     getLoginInfo()
@@ -25,7 +25,7 @@ function getGraphInfo() {
     updateGraph()
 }
 
-function updateGraph(reloadNeeded = false) {
+function updateGraph(templateType = "Label", reloadNeeded = false) {
     let session = driver.session()
     session
         .run(initialCypher)
@@ -45,18 +45,16 @@ function updateGraph(reloadNeeded = false) {
                 viz.reload()
             session.close()
         })
+        templateChanged(true, templateType)//обновление fieldset для добавления вершины (Label) или связи (Type)
 }
 
 function start() {
-    document.getElementById("Label").add(new Option("Новый тип"))
-    document.getElementById("Type").add(new Option("Новый тип"))
-    fillingSelect("Label", "MATCH (n) RETURN distinct labels(n)", "labels(n)")
-    fillingSelect("Type", "MATCH (a)-[r]->(b) RETURN distinct(type(r))", "(type(r))")
-    templateChanged(true, 'Label')
-    templateChanged(true, 'Type')
+    fillingSelect("Label", "MATCH (n) RETURN distinct labels(n)", "labels(n)")//заполнение select для выбора типа вершины
+    fillingSelect("Type", "MATCH (a)-[r]->(b) RETURN distinct(type(r))", "(type(r))")//заполнение select для выбора типа связи
+    templateChanged(true, 'Type')//обновление fieldset для добавления связи
     let session = driver.session()
     session
-        .run("match (a) return a.id order by a.id desc limit 1")
+        .run("match (a) return a.id order by a.id desc limit 1")//поиск максимального id
         .then(result => {
             lastID = result.records[0].get("a.id")
         })
@@ -66,7 +64,7 @@ function start() {
         .then(() => session.close())
 }
 
-function fillingSelect(select, cypherCode, captionOfResult) {
+function fillingSelect(select, cypherCode, captionOfResult) {//заполнение select
     let templateSession = driver.session()
     templateSession
         .run(cypherCode)
@@ -74,8 +72,8 @@ function fillingSelect(select, cypherCode, captionOfResult) {
             for(let template of result.records) {
                 let captionOfTemplate = template.get(captionOfResult)
                 document.getElementById(select).add(new Option(captionOfTemplate))
-                if(select === "Label") {
-                    config.labels[captionOfTemplate] = {
+                if (select === "Label") {//если заполняется select для выбора типа вершин
+                    config.labels[captionOfTemplate] = {//настроить config для отображения вершин
                         caption: "title",
                         size: "size",
                         community: "topicNumber"
@@ -89,43 +87,50 @@ function fillingSelect(select, cypherCode, captionOfResult) {
         })
 }
 
-function templateChanged(isFirstLevel, templateType) {
-    document.getElementById("div3" + templateType).innerHTML = ""
-    let templatesSelector = document.getElementById(templateType)
+function templateChanged(isFirstLevel, templateType) {//срабатывает при изменении выбранного элемента в любом select
+    let div1 = `div1${templateType}`
+    let div2 = `div2${templateType}`
+    let div3 = `div3${templateType}`//id div нужного fieldset
+    document.getElementById(div2).innerHTML = ""
+    document.getElementById(div3).innerHTML = ""//удаление всех элементов с div2 и div3
+    let extendsSelectID = `extends${templateType}`//id для выбора от какого типа наследовать
+    let templatesSelector = document.getElementById(templateType)//select для выбора типа связи или вершины
     if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый тип" && isFirstLevel) {
-        document.getElementById("div2" + templateType).innerHTML = ""
-        document.getElementById("div1" + templateType).innerHTML = '<label>Имя типа:</label><br>' +
-        '<input type="text" id="nameOf' + templateType + '"><br>' +
-        '<label>Унаследован от:</label><br>' +
-        '<select id="extends' + templateType + '"'
-        + '" onChange="templateChanged(false, \'' + templateType + '\')"></select><br>'
-        document.getElementById("extends" + templateType).add(new Option("Не унаследован"))
-        if(templateType === "Label") {
-            fillingSelect("extends" + templateType, "MATCH (n) RETURN distinct labels(n)", "labels(n)")
+        //если изменился элемент в select выбора типа и этот элемент - Новый тип
+        document.getElementById(div1).innerHTML = //добавление элементов в div1
+        `<label>Имя типа:</label><br>
+        <input type="text" id="nameOf${templateType}"><br>
+        <label>Унаследован от:</label><br>
+        <select id="${extendsSelectID}" onChange="templateChanged(false, '${templateType}')"></select><br>` /*Добавление input для
+        ввода имени типа и select для выбора от какого типа унаследован данный тип*/
+        document.getElementById(extendsSelectID).add(new Option("Не унаследован"))//добавлении опции "Не унаследован"
+        if(templateType === "Label") {//заполнение select типами вершин или связей
+            fillingSelect(extendsSelectID, "MATCH (n) RETURN distinct labels(n)", "labels(n)")
         }
         else {
-            fillingSelect("extends" + templateType, "MATCH (a)-[r]->(b) RETURN distinct(type(r))", "(type(r))")
+            fillingSelect(extendsSelectID, "MATCH (a)-[r]->(b) RETURN distinct(type(r))", "(type(r))")
         }
     }
-    else {
-        if(isFirstLevel) {
-            document.getElementById("div1" + templateType).innerHTML = ""
+    else {//елси выбран тип или тип, от которого нужно наследоваться
+        if(isFirstLevel) {//если выбран тип
+            document.getElementById(div1).innerHTML = ""//очистка div1
         }
-        document.getElementById("div2" + templateType).innerHTML = ""
-        let session = driver.session()
-        let extendsTemplatesSelector = document.getElementById("extends" + templateType)
+        let extendsTemplatesSelector = document.getElementById(extendsSelectID)//select для выбора от какого типа наследоваться
         let nameOfLabel = isFirstLevel ? templatesSelector.options[templatesSelector.selectedIndex].text
-        : extendsTemplatesSelector.options[extendsTemplatesSelector.selectedIndex].text
-        let cypher = templateType === "Label" ? "MATCH (a:" + nameOfLabel + ") UNWIND keys(a) AS key RETURN distinct key"
-        : "match ()-[r:" + nameOfLabel + "]->() Unwind keys(r) AS key return distinct key"
+        : extendsTemplatesSelector.options[extendsTemplatesSelector.selectedIndex].text//имя типа любого уровня
+        let cypher = (templateType === "Label") ? `MATCH (a:${nameOfLabel}) UNWIND keys(a) AS key RETURN distinct key`
+        : `match ()-[r:${nameOfLabel}]->() Unwind keys(r) AS key return distinct key`/*комманда на cypher для поиска всех свойств
+        вершин или связей*/
+        let session = driver.session()
         session
             .run(cypher)
             .then(result => {
                 for(let property of result.records) {
                     if(property.get("key") !== "title" && property.get("key") !== "size" && property.get("key") !== "id") {
-                        document.getElementById("div2" + templateType).innerHTML +=
-                        '<label>' + property.get("key") + ':</label><br>' +
-                        '<input type = "text" id = "' + property.get("key") + '"><br>'
+                        //если свойство не title, size и id
+                        document.getElementById(div2).innerHTML +=
+                        `<label>${property.get("key")}:</label><br>
+                        <input type = "text" id = "${property.get("key")}"><br>`//добавление input для ввода значения свойства
                     }
                 }
             })
@@ -137,27 +142,30 @@ function templateChanged(isFirstLevel, templateType) {
             })
     }
     newPropertysLabelCount = 0
-    newPropertysTypeCount = 0
+    newPropertysTypeCount = 0//обнуление кол-ва новых добавленных свойств
 }
 
-function addPropertyClick(templateType) {
-    let numberOfNewProperty = 0
-    let propertys = []
-    let propertysValues = []
-    let newPropertysCount = templateType === "Label" ? newPropertysLabelCount : newPropertysTypeCount
-    while (document.getElementById("property" + templateType + numberOfNewProperty) != null) {
-        propertys.push(document.getElementById("property" + templateType + numberOfNewProperty).value)
-        propertysValues.push(document.getElementById("property" + templateType + numberOfNewProperty++ + "Value").value)
+function addPropertyClick(templateType) {//добавление нового свойства для вершины или связи
+    let numberOfNewProperty = 0//номер нового свойства
+    let propertys = []//массив имен свойств
+    let propertysValues = []//массив значений свойств
+    let newPropertysCount = (templateType === "Label") ? newPropertysLabelCount : newPropertysTypeCount//кол-во уже добавленных свойств
+    while (document.getElementById(`property${templateType}${numberOfNewProperty}`) != null) {//пока есть input для новых свойств
+        propertys.push(document.getElementById(`property${templateType}${numberOfNewProperty}`).value)
+        propertysValues.push(document.getElementById(`property${templateType}${numberOfNewProperty++}Value`).value)
+        //добавление имен свойств и их значений в массивы
     }
-    document.getElementById("div3" + templateType).innerHTML += '<label>Имя свойства:</label><br>' +
-    '<input type = "text" id = "property' + templateType + newPropertysCount + '"<br>' +
-    '<br><label>Значение:</label><br>' +
-    '<input type = "text" id = "property' + templateType + newPropertysCount++ + 'Value"<br><br>'
-    for(let i = 0; i < propertys.length; i++) {
-        document.getElementById("property" + templateType + i).value = propertys[i]
-        document.getElementById("property" + templateType + i + "Value").value = propertysValues[i]
+    document.getElementById(`div3${templateType}`).innerHTML +=
+    `<label>Имя свойства:</label><br>
+    <input type = "text" id = "property${templateType}${newPropertysCount}">
+    <br><label>Значение:</label><br>
+    <input type = "text" id = "property${templateType}${newPropertysCount++}Value"><br>`//добавление input для нового свойства
+    for(let i = 0; i < propertys.length; i++) {//заполнение предыдущих input
+        propertyInputID = `property${templateType}${i}`
+        document.getElementById(propertyInputID).value = propertys[i]
+        document.getElementById(`${propertyInputID}Value`).value = propertysValues[i]
     }
-    if(templateType === "Label") {
+    if(templateType === "Label") {//сохранение кол-ва новых элементов
         newPropertysLabelCount = newPropertysCount
     }
     else {
@@ -165,36 +173,39 @@ function addPropertyClick(templateType) {
     }
 }
 
-function replacementSpaces(caption) {
-    let indexOfSpace
+function replacementSpaces(caption) {//замена пробелов в именах типа и свойств на _ (функция меняет исходную строку)
+    let indexOfSpace//index пробела
     while ((indexOfSpace = caption.indexOf(" ")) != -1) {
-        caption = caption.slice(0, indexOfSpace) + "_" + caption.slice(indexOfSpace + 1)
+        caption = `${caption.slice(0, indexOfSpace)}_${caption.slice(indexOfSpace + 1)}`
     }
     return caption
 }
 
-function addRelations() {
-    if(firstNodeID < 0 || secondNodeID < 0) {
-        alert(firstNodeID + "," + secondNodeID)
+function addRelations() {//добавление связи
+    if(firstNodeID < 0 || secondNodeID < 0) {//если элементы не выбраны
         return
     }
-    let cypher = "match(a) where a.id = " + firstNodeID + " match(b) where b.id = " + secondNodeID + " create (a)-[r:"
-    let typeSelect = document.getElementById("Type")
-    if(typeSelect.options[typeSelect.selectedIndex].text === "Новый тип") {
-        if(document.getElementById("nameOfType") === "") {
+    let typeSelect = document.getElementById("Type")//select выбора типа связи
+    let isFirstLevel = false
+    let nameOfTemplate//имя типа
+    if(typeSelect.options[typeSelect.selectedIndex].text === "Новый тип") {//если выбран Новый тип
+        if(document.getElementById("nameOfType") === "") {//если имя нового типа не введено
             return
         }
-        cypher += replacementSpaces(document.getElementById("nameOfType").value)
+        isFirstLevel = true
+        nameOfTemplate = replacementSpaces(document.getElementById("nameOfType").value)//имя типа без пробелов
+        addOption(nameOfTemplate, "Type")//добавление типа в select
     }
     else {
-        cypher += replacementSpaces(typeSelect.options[typeSelect.selectedIndex].value)
+        nameOfTemplate = replacementSpaces(typeSelect.options[typeSelect.selectedIndex].value)//имя типа из select
     }
-    let propertys = readPropertys("Type")
-    let isFirstProperty = propertys === "" ? true : false
-    cypher += " {" + propertys + "}]->(b)"
+    let propertys = readPropertys("Type")//считывание свойств вершин и их значение
+    let cypher = `match(a) where a.id = ${firstNodeID} match(b) where b.id = ${secondNodeID}
+    create (a)-[r:${nameOfTemplate} {${propertys}}]->(b)`//составление комманды для neo4j
+    console.log(cypher)
     let session = driver.session()
     session
-        .run(cypher)
+        .run(cypher)//добавление вершины
         .then(() => {})
         .catch((error) => {
             console.log(error)
@@ -203,92 +214,103 @@ function addRelations() {
         })
         .then(() => {
             session.close()
-            updateGraph()
+            updateGraph("Type")//обновление графа
             updateMenu()
         })
     newPropertysTypeCount = 0
-    templateChanged(isFirstLevel, "Type")
+    document.getElementById("firstNode").value = ""
+    document.getElementById("secondNode").value = ""
+    firstNodeID = -1
+    secondNodeID = -1//отчистка input и обнуление полей
 }
 
-function readPropertys(templateType) {
-    let cypher = ""
-    let startOfIDProperty = 0
-    let propertysHTML = document.getElementById("div2" + templateType).innerHTML
-    let isFirstProperty = true
-    while (true) {
+function readPropertys(templateType) {//считывание свойств в комманду cypher
+    let cypher = ""//команда
+    let startOfIDProperty = 0//начало имени свойства
+    let propertysHTML = document.getElementById(`div2${templateType}`).innerHTML//html div2
+    let isFirstProperty = true//первое ли свойство в команде
+    while (true) {//поиск имен свойств в div2
         startOfIDProperty = propertysHTML.indexOf("=", startOfIDProperty)
         if(startOfIDProperty == -1) {
             break
         }
-        if(!isFirstProperty) {
+        if(!isFirstProperty) {//ставим запятую в команде, если свойство не первое
             cypher += ","
         }
-        startOfIDProperty = propertysHTML.indexOf("=", ++startOfIDProperty)
-        startOfIDProperty += 2;
-        let endOfIDProperty = startOfIDProperty;
+        startOfIDProperty = propertysHTML.indexOf("=", ++startOfIDProperty)//имя свойства написано после второго знака =
+        startOfIDProperty += 2;//пропуск пробела и ковычек
+        let endOfIDProperty = startOfIDProperty;//индекс последней буквы свойства
         while(propertysHTML[endOfIDProperty] != '"') {
             endOfIDProperty++;
         }
-        let propertyCaption = replacementSpaces(propertysHTML.slice(startOfIDProperty, endOfIDProperty))
-        cypher += propertyCaption + ': "' + document.getElementById(propertyCaption).value + '"'
-        isFirstProperty = false
+        let propertyCaption = replacementSpaces(propertysHTML.slice(startOfIDProperty, endOfIDProperty))//имя свойства
+        cypher += `${propertyCaption}: "${document.getElementById(propertyCaption).value}"`//добавление свойства в команду
+        isFirstProperty = false//если цикл прошел - есть свойства
     }
-    let newPropertyNumber = 0;
-    while(document.getElementById("property" + templateType + newPropertyNumber) != null) {
-        if(document.getElementById("property" + templateType + newPropertyNumber).value === "") {
+    let newPropertyNumber = 0;//номер нового свойства
+    let propertyInputID = `property${templateType}`//id input для ввода имен свойств и их значений
+    while(document.getElementById(`${propertyInputID}${newPropertyNumber}`) != null) {//пока есть свойства
+        if(document.getElementById(`${propertyInputID}${newPropertyNumber}`).value === "") {//если имя свойства не введено
             newPropertyNumber++
             continue
         }
         if(!isFirstProperty) {
             cypher += ","
         }
-        if(document.getElementById("property" + templateType + newPropertyNumber).value === "") {
+        if(document.getElementById(`${propertyInputID}${newPropertyNumber}`).value === "") {//скорее всего лишняя строчка, менять боюсь
             continue
         }
-        cypher += replacementSpaces(document.getElementById("property" + templateType + newPropertyNumber).value) + ': "' +
-        document.getElementById("property" + templateType + newPropertyNumber++ + "Value").value + '"'
+        cypher += `${replacementSpaces(document.getElementById(`${propertyInputID}${newPropertyNumber}`).value)}: "
+        ${document.getElementById(`${propertyInputID}${newPropertyNumber++}Value`).value}"`//добавление свойства в команду
         isFirstProperty = false
     }
     return cypher
 }
 
-function addNodeByTamplateClick() {
-    if(document.getElementById("caption").value === "") {
+function addOption(optionName, templateType) {//добавление опции в select
+    let select = document.getElementById(templateType)//select для выбора типа связи или вершины
+    for (let i = 0; i < select.options.length; i++) {//проверка на присутствие добавляемого имени в списке
+        if(select.options[i].text === optionName) {
+            return
+        }
+    }
+    select.add(new Option(optionName, optionName, false, true))//добавление имени и его выделение
+}
+
+function addNodeByTamplateClick() {//добавление вершины
+    if(document.getElementById("caption").value === "") {//если не введено имя вершины
         return
     }
     let isFirstLevel = false
-    let cypher = "create (a:"
-    let templatesSelector = document.getElementById("Label")
-    if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый тип") {
-        if(document.getElementById("nameOfLabel").value === "") {
+    let templatesSelector = document.getElementById("Label")//select для выбора типа верщины
+    let captionOfTemplate//имя типа
+    if(templatesSelector.options[templatesSelector.selectedIndex].text === "Новый тип") {//если новый тип
+        if(document.getElementById("nameOfLabel").value === "") {//если имя типа не введено
             return
         }
         isFirstLevel = true
-        let captionOfTemplate = replacementSpaces(document.getElementById("nameOfLabel").value)
-        document.getElementById("extendsLabel").add(new Option(captionOfTemplate))
-        cypher += captionOfTemplate
-        templatesSelector.add(new Option(captionOfTemplate))
-        config.labels[captionOfTemplate] = {
+        captionOfTemplate = replacementSpaces(document.getElementById("nameOfLabel").value)//имя типа без пробелов
+        addOption(captionOfTemplate, "Label")//добавление типа в select
+        config.labels[captionOfTemplate] = {//добавление типа в config
             caption: "title",
             size: "size",
             community: "topicNumber"
         }
     }
     else {
-        cypher += templatesSelector.options[templatesSelector.selectedIndex].text
+        captionOfTemplate = templatesSelector.options[templatesSelector.selectedIndex].text//имя типа из select
     }
-    let propertys = readPropertys("Label")
-    let isFirstProperty = propertys === "" ? true : false
-    cypher += "{" + propertys
-    if(!isFirstProperty) {
-        cypher += ","
-    }
-    cypher += ' title: "' + document.getElementById("caption").value + '",'
-    cypher += ' id: ' + ++lastID + ','
-    cypher += ' size:' + document.getElementById("size").options[document.getElementById("size").selectedIndex].value + '})'
+    let propertys = readPropertys("Label")//считывание свойств вершины
+    let isFirstProperty = (propertys === "") ? true : false//считались ли свойства
+    let comma = isFirstProperty ? "" : ","//запятая если есть свойства
+    let cypher = `create (a:${captionOfTemplate} {${propertys}${comma}
+        title: "${document.getElementById("caption").value}",
+        size: ${document.getElementById("size").options[document.getElementById("size").selectedIndex].value},
+        id: ${++lastID}})`//создание команды с добавлением имени, размера и id вершины
+    console.log(cypher)
     let session = driver.session()
     session
-        .run(cypher)
+        .run(cypher)//добавление вершины
         .then(() => {})
         .catch(error => {
             console.log(error)
@@ -297,23 +319,22 @@ function addNodeByTamplateClick() {
         })
         .then(() => {
             session.close()
-            updateGraph()
+            updateGraph()//обновление графа
             updateMenu()
         })
-    newPropertysLabelCount = 0
-    templateChanged(isFirstLevel, "Label")
-    document.getElementById("caption").value = ""
+        newPropertysLabelCount = 0
+        document.getElementById("caption").value = ""//очистка input и обнуление полей
 }
 
-function clickOnULSearch(event, node, UL) {
+function clickOnULSearch(event, node, UL) {//функция клика по элементу поиска
     let selectedNodeId = event.target.closest("li").value
     let nodeSelector = document.getElementById("nodeSelect")
     for (let i = 0; i < nodeSelector.options.length; i++){
         if (nodeSelector.options[i].value == selectedNodeId) {
-            document.getElementById(node).value = nodeSelector.options[i].text
+            document.getElementById(node).value = nodeSelector.options[i].text//заполнение вершины
             clearUL(UL)
             if(node === "firstNode") {
-                firstNodeID = selectedNodeId
+                firstNodeID = selectedNodeId//сохранение id выбранного элемента
             }
             else {
                 secondNodeID = selectedNodeId
@@ -323,7 +344,7 @@ function clickOnULSearch(event, node, UL) {
     }
 }
 
-function clearUL(UL) {
+function clearUL(UL) {//очистка UL
     let list = document.getElementById(UL)
     while (list.hasChildNodes()) {
         list.removeChild(list.firstChild);
@@ -333,12 +354,12 @@ function clearUL(UL) {
 //!!! Костыль ([:subsection*0..100]) не показывает деревья с больше чем 100 этажей
 function addOneWayFilter() {
     viz.updateWithCypher("MATCH p = ({id:" + document.getElementById("oneWayFilterSelector").value
-        + "})-[:subsection*0..100]->()  RETURN p")
+        + "})-[*0..100]->()  RETURN p")
 }
 
 function showOneWayFilter() {
     viz.renderWithCypher("MATCH p = ({id:" + document.getElementById("oneWayFilterSelector").value
-        + "})-[:subsection*0..100]->()  RETURN p")
+        + "})-[*0..100]->()  RETURN p")
 }
 
 function addDepthFilter() {
@@ -350,7 +371,7 @@ function addDepthFilter() {
 
     for (let i = depth; i >= 0; i--){
         viz.updateWithCypher("MATCH p = ({id:" + document.getElementById("depthFilterSelector").value
-            + "})-[:subsection*" + i + "]-()  RETURN p")
+            + "})-[*" + i + "]-()  RETURN p")
     }
 }
 
@@ -363,7 +384,7 @@ function showDepthFilter() {
     viz.clearNetwork()
     for (let i = depth; i >= 0; i--){
         viz.updateWithCypher("MATCH p = ({id:" + document.getElementById("depthFilterSelector").value
-            + "})-[:subsection*" + i + "]-()  RETURN p")
+            + "})-[*" + i + "]-()  RETURN p")
     }
 }
 
